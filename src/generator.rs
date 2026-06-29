@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{fmt, io};
 
 use crate::cli;
 
@@ -60,6 +60,7 @@ pub struct GeneratorConfig {
     pub cmake_version: String,
     pub use_style: bool,
     pub cmake_target: Option<CMakeTargetConfig>,
+    pub run_git_init: bool,
 }
 impl fmt::Display for GeneratorConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -75,7 +76,16 @@ impl fmt::Display for GeneratorConfig {
         if let Some(target) = &self.cmake_target {
             writeln!(f, "{target}")?;
         }
+        writeln!(
+            f,
+            "run git init: {}",
+            if self.run_git_init { "yes" } else { "no" }
+        )?;
 
         Ok(())
     }
+}
+
+pub fn generate(config: GeneratorConfig) -> io::Result<()> {
+    todo!()
 }
