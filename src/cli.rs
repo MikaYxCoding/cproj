@@ -37,6 +37,7 @@ pub fn input(text: &str, default: Option<&str>) -> String {
     }
 }
 
+#[must_use]
 pub fn question(text: &str, default: Option<bool>) -> bool {
     let mut buffer = String::new();
 
@@ -69,6 +70,7 @@ pub fn question(text: &str, default: Option<bool>) -> bool {
     }
 }
 
+#[must_use]
 pub fn input_as<T>(text: &str, default: Option<T>) -> T
 where
     for<'a> T: FromCli<'a> + fmt::Display,
