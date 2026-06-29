@@ -1,66 +1,51 @@
-mod cli {
-    use std::io::{self, Write};
+mod cli;
+mod generator {
+    use std::fmt;
 
-    #[must_use]
-    pub fn input(text: &str, default: Option<&str>) -> String {
-        let mut buffer = String::new();
+    use crate::cli;
 
-        match default {
-            Some(default) => {
-                let default = default.to_owned();
+    #[derive(Debug)]
+    pub enum CMakeTargetType {
+        Executable,
+        StaticLib,
+        SharedLib,
+        InterfaceLib,
+    }
+    impl TryFrom<&str> for CMakeTargetType {
+        type Error = ();
 
-                print!("{text} ({default}): ");
-                io::stdout().flush().expect("failed to flush stdout");
-
-                io::stdin().read_line(&mut buffer).expect("failed to read");
-                buffer = buffer.trim().to_owned();
-
-                if buffer.len() == 0 { default } else { buffer }
-            }
-            None => {
-                while buffer.len() == 0 {
-                    print!("{text}: ");
-                    io::stdout().flush().expect("failed to flush stdout");
-
-                    io::stdin().read_line(&mut buffer).expect("failed to read");
-                    buffer = buffer.trim().to_owned();
-                }
-
-                buffer
+        fn try_from(value: &str) -> Result<CMakeTargetType, Self::Error> {
+            match value {
+                "executable" => Ok(CMakeTargetType::Executable),
+                "static" => Ok(CMakeTargetType::StaticLib),
+                "shared" => Ok(CMakeTargetType::SharedLib),
+                "interface" => Ok(CMakeTargetType::InterfaceLib),
+                _ => Err(()),
             }
         }
     }
 
-    pub fn question(text: &str, default: Option<bool>) -> bool {
-        let mut buffer = String::new();
-
-        match default {
-            Some(default) => loop {
-                buffer.clear();
-                print!("{text} ({})? ", if default { "yes" } else { "no" });
-                io::stdout().flush().expect("failed to flush stdout");
-
-                io::stdin().read_line(&mut buffer).expect("failed to read");
-                match buffer.to_lowercase().trim() {
-                    "yes" => break true,
-                    "no" => break false,
-                    input if input.len() == 0 => break default,
-                    _ => println!("expected 'yes' or 'no'"),
-                }
-            },
-            None => loop {
-                buffer.clear();
-                print!("{text}? ");
-                io::stdout().flush().expect("failed to flush stdout");
-
-                io::stdin().read_line(&mut buffer).expect("failed to read");
-                match buffer.to_lowercase().trim() {
-                    "yes" => break true,
-                    "no" => break false,
-                    _ => println!("expected 'yes' or 'no'"),
-                }
-            },
+    impl<'a> cli::FromCli<'a> for CMakeTargetType {
+        fn value_hint() -> String {
+            "executable, static, shared, interface".to_owned()
         }
+    }
+
+    impl fmt::Display for CMakeTargetType {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self {
+                CMakeTargetType::Executable => write!(f, "executable"),
+                CMakeTargetType::StaticLib => write!(f, "static"),
+                CMakeTargetType::SharedLib => write!(f, "shared"),
+                CMakeTargetType::InterfaceLib => write!(f, "interface"),
+            }
+        }
+    }
+
+    #[derive(Debug)]
+    pub struct CMakeTargetConfig {
+        pub name: String,
+        pub target_type: CMakeTargetType,
     }
 }
 
