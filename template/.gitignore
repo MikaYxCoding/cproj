@@ -1,0 +1,8 @@
+# folders
+build/
+.cache/
+dist/
+
+# editor
+.vscode/
+.zed/
