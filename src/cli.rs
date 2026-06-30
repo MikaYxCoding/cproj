@@ -3,8 +3,19 @@ use std::{
     io::{self, Write},
 };
 
-pub trait FromCli<'a>: TryFrom<&'a str> {
+pub trait FromCli: Sized + fmt::Display {
     fn value_hint() -> String;
+    fn try_from(buf: &str) -> Option<Self>;
+}
+
+impl FromCli for u32 {
+    fn value_hint() -> String {
+        "int".to_owned()
+    }
+
+    fn try_from(buf: &str) -> Option<Self> {
+        str::parse(buf).ok()
+    }
 }
 
 #[must_use]
@@ -73,7 +84,7 @@ pub fn question(text: &str, default: Option<bool>) -> bool {
 #[must_use]
 pub fn input_as<T>(text: &str, default: Option<T>) -> T
 where
-    for<'a> T: FromCli<'a> + fmt::Display,
+    T: FromCli,
 {
     let mut buffer = String::new();
 
@@ -91,8 +102,8 @@ where
             }
 
             match T::try_from(trimmed_buffer) {
-                Ok(value) => break value,
-                Err(_) => {}
+                Some(value) => break value,
+                None => {}
             }
 
             buffer.clear();
@@ -104,8 +115,8 @@ where
             io::stdin().read_line(&mut buffer).expect("failed to read");
 
             match T::try_from(buffer.to_lowercase().trim()) {
-                Ok(value) => break value,
-                Err(_) => {}
+                Some(value) => break value,
+                None => {}
             }
 
             buffer.clear();

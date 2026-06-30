@@ -1,13 +1,74 @@
 use std::{
-    any::Any,
     error, fmt,
     fs::{self, File},
     io::{self, Write},
     path::{self, Path},
-    process::{Command, Stdio},
+    process::Command,
 };
 
 use crate::cli;
+
+#[derive(Debug)]
+pub enum Languages {
+    // C
+    C,
+    // C++
+    CXX,
+    // both C and C++
+    CXXC,
+}
+impl cli::FromCli for Languages {
+    fn value_hint() -> String {
+        "C, CXX, or both".to_owned()
+    }
+
+    fn try_from(buf: &str) -> Option<Self> {
+        match buf {
+            "c" => Some(Languages::C),
+            "cxx" => Some(Languages::CXX),
+            "c cxx" => Some(Languages::CXXC),
+            "cxx c" => Some(Languages::CXXC),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for Languages {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Languages::C => write!(f, "C"),
+            Languages::CXX => write!(f, "CXX"),
+            Languages::CXXC => write!(f, "C CXX"),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct LanguageStandard {
+    pub c: Option<u32>,
+    pub cxx: Option<u32>,
+}
+impl fmt::Display for LanguageStandard {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.c.is_none() && self.cxx.is_none() {
+            return write!(f, "undefined");
+        }
+
+        if let Some(c) = self.c {
+            write!(f, "C STANDARD: {c}")?;
+        }
+
+        if let Some(cxx) = self.cxx {
+            write!(
+                f,
+                "{}CXX STANDARD: {cxx}",
+                if self.c.is_some() { ", " } else { "" }
+            )?;
+        }
+
+        Ok(())
+    }
+}
 
 #[derive(Debug)]
 pub enum CMakeTargetType {
@@ -16,23 +77,19 @@ pub enum CMakeTargetType {
     SharedLib,
     InterfaceLib,
 }
-impl TryFrom<&str> for CMakeTargetType {
-    type Error = ();
-
-    fn try_from(value: &str) -> Result<CMakeTargetType, Self::Error> {
-        match value {
-            "executable" => Ok(CMakeTargetType::Executable),
-            "static" => Ok(CMakeTargetType::StaticLib),
-            "shared" => Ok(CMakeTargetType::SharedLib),
-            "interface" => Ok(CMakeTargetType::InterfaceLib),
-            _ => Err(()),
-        }
-    }
-}
-
-impl<'a> cli::FromCli<'a> for CMakeTargetType {
+impl cli::FromCli for CMakeTargetType {
     fn value_hint() -> String {
         "executable, static, shared, interface".to_owned()
+    }
+
+    fn try_from(buf: &str) -> Option<Self> {
+        match buf {
+            "executable" => Some(CMakeTargetType::Executable),
+            "static" => Some(CMakeTargetType::StaticLib),
+            "shared" => Some(CMakeTargetType::SharedLib),
+            "interface" => Some(CMakeTargetType::InterfaceLib),
+            _ => None,
+        }
     }
 }
 
@@ -64,6 +121,9 @@ pub struct GeneratorConfig {
     pub folder_name: String,
     pub project_name: String,
     pub project_version: String,
+    pub languages: Languages,
+    pub standard: LanguageStandard,
+    pub main_file: String,
     pub cmake_version: String,
     pub use_style: bool,
     pub cmake_target: Option<CMakeTargetConfig>,
@@ -74,6 +134,9 @@ impl fmt::Display for GeneratorConfig {
         writeln!(f, "folder name: {}", self.folder_name)?;
         writeln!(f, "project name: {}", self.project_name)?;
         writeln!(f, "project version: {}", self.project_version)?;
+        writeln!(f, "languages: {}", self.languages)?;
+        writeln!(f, "language standard: {}", self.standard)?;
+        writeln!(f, "main file: {}", self.main_file)?;
         writeln!(f, "CMake version: {}", self.cmake_version)?;
         writeln!(
             f,
@@ -148,19 +211,107 @@ pub fn generate(config: GeneratorConfig) -> Result<(), GenerationError> {
 
     cmakelists.write_all(
         format!(
-            "project({} VERSION {} LANGUAGES CXX)\n\n",
-            config.project_name, config.project_version
+            "project({} VERSION {} LANGUAGES {})\n",
+            config.project_name, config.project_version, config.languages
         )
         .as_bytes(),
     )?;
+    if let Some(c) = config.standard.c {
+        cmakelists.write_all(format!("set(CMAKE_C_STANDARD {c})\n").as_bytes())?;
+        cmakelists.write_all(format!("set(CMAKE_C_STANDARD_REQUIRED ON)\n").as_bytes())?;
+    }
+
+    if let Some(cxx) = config.standard.cxx {
+        cmakelists.write_all(format!("set(CMAKE_CXX_STANDARD {cxx})\n").as_bytes())?;
+        cmakelists.write_all(format!("set(CMAKE_CXX_STANDARD_REQUIRED ON)\n").as_bytes())?;
+    }
+
+    cmakelists
+        .write_all(format!("\nset(sources\n    src/{}\n)\n\n", config.main_file).as_bytes())?;
 
     if let Some(target) = config.cmake_target {
         match target.target_type {
-            CMakeTargetType::Executable => todo!(),
-            CMakeTargetType::StaticLib => todo!(),
-            CMakeTargetType::SharedLib => todo!(),
-            CMakeTargetType::InterfaceLib => todo!(),
+            CMakeTargetType::Executable => {
+                cmakelists.write_all(
+                    format!("add_executable({} ${{sources}})\n", target.name).as_bytes(),
+                )?;
+                cmakelists
+                    .write_all(format!("set_target_properties({}\n    PROPERTIES\n       EXPORT_COMPILE_COMMANDS ON\n)\n", target.name).as_bytes())?;
+                cmakelists
+                    .write_all(format!("if(NOT MSVC)\n    target_compile_options({} PRIVATE -Wall -Wextra)\nelse()\n    target_compile_options({} PRIVATE /W4)\nendif()\n", target.name, target.name).as_bytes())?;
+                cmakelists.write_all(
+                    format!("# target_compile_definitions({} ...)\n", target.name).as_bytes(),
+                )?;
+                cmakelists.write_all(
+                    format!("# target_include_directories({} ...)\n", target.name).as_bytes(),
+                )?;
+                cmakelists.write_all(
+                    format!("# target_link_libraries({} ...)\n", target.name).as_bytes(),
+                )?;
+            }
+            CMakeTargetType::StaticLib => {
+                cmakelists.write_all(
+                    format!("add_library({} STATIC ${{sources}})\n", target.name).as_bytes(),
+                )?;
+                cmakelists
+                    .write_all(format!("set_target_properties({}\n    PROPERTIES\n       EXPORT_COMPILE_COMMANDS ON\n)\n", target.name).as_bytes())?;
+                cmakelists
+                    .write_all(format!("if(NOT MSVC)\n    target_compile_options({} PUBLIC -Wall -Wextra)\nelse()\n    target_compile_options({} PUBLIC /W4)\nendif()\n", target.name, target.name).as_bytes())?;
+                cmakelists.write_all(
+                    format!("# target_compile_definitions({} ...)\n", target.name).as_bytes(),
+                )?;
+                cmakelists.write_all(
+                    format!("# target_include_directories({} ...)\n", target.name).as_bytes(),
+                )?;
+                cmakelists.write_all(
+                    format!("# target_link_libraries({} ...)\n", target.name).as_bytes(),
+                )?;
+            }
+            CMakeTargetType::SharedLib => {
+                cmakelists.write_all(
+                    format!("add_library({} SHARED ${{sources}})\n", target.name).as_bytes(),
+                )?;
+                cmakelists
+                    .write_all(format!("set_target_properties({}\n    PROPERTIES\n       EXPORT_COMPILE_COMMANDS ON\n)\n", target.name).as_bytes())?;
+                cmakelists
+                    .write_all(format!("if(NOT MSVC)\n    target_compile_options({} PUBLIC -Wall -Wextra)\nelse()\n    target_compile_options({} PUBLIC /W4)\nendif()\n", target.name, target.name).as_bytes())?;
+                cmakelists.write_all(
+                    format!("# target_compile_definitions({} ...)\n", target.name).as_bytes(),
+                )?;
+                cmakelists.write_all(
+                    format!("# target_include_directories({} ...)\n", target.name).as_bytes(),
+                )?;
+                cmakelists.write_all(
+                    format!("# target_link_libraries({} ...)\n", target.name).as_bytes(),
+                )?;
+            }
+            CMakeTargetType::InterfaceLib => {
+                cmakelists
+                    .write_all(format!("add_library({} INTERFACE)\n", target.name).as_bytes())?;
+                cmakelists.write_all(
+                    format!("# target_include_directories({} ...)\n", target.name).as_bytes(),
+                )?;
+                cmakelists.write_all(
+                    format!("# target_link_libraries({} ...)\n", target.name).as_bytes(),
+                )?;
+            }
         }
+    }
+
+    fs::create_dir(folder_path.join("src"))?;
+    let main_file = folder_path.join("src").join(config.main_file);
+
+    match main_file.extension() {
+        Some(ext) => {
+            if ext == "c" {
+                fs::write(main_file, include_str!("../template/main.c"))?
+            } else if ext == "cpp" || ext == "cxx" {
+                fs::write(main_file, include_str!("../template/main.cpp"))?
+            } else {
+                fs::write(main_file, "")?
+            }
+        }
+        None => fs::write(main_file, "")?,
     }
 
     Ok(())
