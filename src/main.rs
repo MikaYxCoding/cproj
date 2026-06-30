@@ -4,8 +4,37 @@ use crate::generator::{
     CMakeTargetConfig, CMakeTargetType, GeneratorConfig, LanguageStandard, Languages,
 };
 
+#[cfg(feature = "silly_stuff")]
+use rand::prelude::*;
+
 mod cli;
 mod generator;
+
+#[cfg(feature = "silly_stuff")]
+const NOT_OKAY: [&'static str; 12] = [
+    "ah, okay!",
+    "oh... well, I mean, it's exactly what you told me...",
+    "... seriously?",
+    "ok.",
+    "that's on you",
+    "not my fault you didn't type right!",
+    "omg I'm so not doing this again",
+    "okay!",
+    "that's fine!",
+    "no worries!",
+    "do worry.",
+    "oh well, whatever, nevermind",
+];
+#[cfg(feature = "silly_stuff")]
+fn get_not_okay_response() -> &'static str {
+    NOT_OKAY.choose(&mut rand::rng()).unwrap()
+}
+
+#[cfg(not(feature = "silly_stuff"))]
+#[inline]
+fn get_not_okay_response() -> &'static str {
+    "okay!"
+}
 
 fn main() -> ExitCode {
     println!("cproj - C/C++ project generator by Mikayeek");
@@ -72,6 +101,8 @@ fn main() -> ExitCode {
         }
 
         println!("all done!");
+    } else {
+        println!("{}", get_not_okay_response());
     }
 
     ExitCode::SUCCESS
