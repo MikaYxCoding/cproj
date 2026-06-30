@@ -1,7 +1,15 @@
 [package]
 name = "cproj"
 version = "0.1.0"
+authors = ["Jesús \"Mikayeek\" Blanco"]
 edition = "2024"
+description = "C/C++ CMake project bootstrapping tool written in Rust (cuz why not)"
+readme = "README.md"
+homepage = "https://github.com/MikaYxCoding/cproj"
+repository = "https://github.com/MikaYxCoding/cproj"
+license = "MIT"
+keywords = ["bootstrapping", "bootstrap", "cli", "cpp", "c++"]
+categories = ["development-tools"]
 
 [dependencies]
 rand = { version = "0.10.1", optional = true }
