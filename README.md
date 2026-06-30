@@ -1,8 +1,10 @@
 <div align="center">
     <h1>cproj</h1>
-
-C/C++ CMake project bootstrapping tool written in Rust (cuz why not)
+    
+    C/C++ CMake project bootstrapping tool written in Rust (cuz why not)
 </div>
+
+[![Build](https://github.com/MikaYxCoding/cproj/actions/workflows/rust.yml/badge.svg)](https://github.com/MikaYxCoding/cproj/actions/workflows/rust.yml)
 
 Exactly what it sounds like. You run it in the terminal, it asks you a couple of questions and sets up a new CMake project for you, complete with `git init`, `.clang-format`, and a fairly customized `CMakeLists.txt`.
 
